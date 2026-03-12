@@ -1,19 +1,3 @@
-<<<<<<< HEAD
-import Navbar from "./Navbar";
-
-function Layout({ children }) {
-  return (
-    <>
-      <Navbar />
-      <div style={{ padding: "20px" }}>
-        {children}
-      </div>
-    </>
-  );
-}
-
-export default Layout;
-=======
 import { Outlet } from "react-router-dom";
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
@@ -42,4 +26,3 @@ export default function Layout() {
     </div>
   );
 }
->>>>>>> 5e988b0

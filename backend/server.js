@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import pickupRoutes from "./routes/pickupRoutes.js";
 import { Server } from "socket.io";
 import Message from "./model/messages.js";
-import http from "http";   // ✅ FIXED
+import http from "http";
 import userRoutes from "./routes/userRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoute.js";
@@ -25,7 +25,7 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const server = http.createServer(app);  // ✅ Required for socket
+const server = http.createServer(app);
 
 app.use(cors());
 app.use(express.json());
@@ -37,19 +37,10 @@ app.use("/api/opportunity", opportunityRoutes);
 app.use("/api/pickups", pickupRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
-app.use("/api/dashboard", dashboardRoutes)
+app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/notifications", notificationRoutes);
 
-// Store online users
-const onlineUsers = new Map();
-const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:5174", // your frontend port
-    methods: ["GET", "POST"],
-  },
-});
-
-let users = [];
+const users = [];
 
 const addUser = (userId, socketId) => {
   if (!users.some((user) => user.userId === userId)) {
@@ -61,21 +52,25 @@ const getUser = (userId) => {
   return users.find((user) => user.userId === userId);
 };
 
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:5173", "http://localhost:5174"],
+    methods: ["GET", "POST"],
+  },
+});
+
 io.on("connection", (socket) => {
   console.log("User Connected:", socket.id);
 
-  // Add user
   socket.on("addUser", (userId) => {
     addUser(userId, socket.id);
     console.log("Users:", users);
   });
 
-  // Send message
   socket.on("sendMessage", async ({ senderId, receiverId, text }) => {
     try {
       const recipient = getUser(receiverId);
 
-      // Create a notification for the receiver
       await Notification.create({
         recipient: receiverId,
         sender: senderId,
@@ -98,13 +93,15 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    users = users.filter((user) => user.socketId !== socket.id);
+    const index = users.findIndex((user) => user.socketId === socket.id);
+    if (index !== -1) {
+      users.splice(index, 1);
+    }
     console.log("User disconnected");
   });
 });
 
-// ✅ IMPORTANT: Use server.listen
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () =>
   console.log(`Server running on port ${PORT}`)
-);
+);

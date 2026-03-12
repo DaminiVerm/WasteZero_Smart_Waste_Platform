@@ -1,50 +1,4 @@
 import { useEffect, useState } from "react";
-<<<<<<< HEAD
-import { useNavigate } from "react-router-dom";
-
-function Dashboard() {
-  const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      navigate("/");
-      return;
-    }
-
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, [navigate]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/");
-  };
-
-  return (
-    <div>
-      <h2>Dashboard</h2>
-
-      {user && (
-        <>
-          <p><strong>Name:</strong> {user.name}</p>
-          <p><strong>Username:</strong> {user.username}</p>
-          <p><strong>Email:</strong> {user.email}</p>
-          <p><strong>Role:</strong> {user.role}</p>
-
-          {user.role === "admin" && <h3>Admin Control Panel</h3>}
-          {user.role === "ngo" && <h3>NGO Management Panel</h3>}
-          {user.role === "volunteer" && <h3>Volunteer Dashboard</h3>}
-        </>
-      )}
-
-      <button onClick={handleLogout}>Logout</button>
-=======
 import axios from "axios";
 
 export default function Dashboard() {
@@ -54,10 +8,10 @@ export default function Dashboard() {
     const fetchData = async () => {
       try {
        const res = await axios.get("/api/dashboard", {
-  headers: {
-    Authorization: `Bearer ${localStorage.getItem("token")}`
-  }
-});
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`
+          }
+        });
         setData(res.data);
       } catch (err) {
         console.log("Dashboard error:", err.response?.data || err.message);
@@ -71,7 +25,7 @@ export default function Dashboard() {
 
   }, []);
 
-  if (!data) return <p className="p-10">Loading dashboard...</p>;
+  if (!data) return <p className="p-10 text-center">Loading dashboard...</p>;
 
   const stats = data.stats || {};
   const pickups = data.pickups || [];
@@ -82,7 +36,7 @@ export default function Dashboard() {
 
       {/* Main */}
       <div className="flex-1 p-6">
-        <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+        <h1 className="text-2xl font-bold mb-6">Dashboard Overview</h1>
 
         {/* Cards */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -93,29 +47,44 @@ export default function Dashboard() {
         </div>
 
         {/* Bottom */}
-        <div className="mx-30 grid lg:grid-cols-2 gap-6 mt-6">
+        <div className="grid lg:grid-cols-2 gap-6 mt-6">
 
           {/* Table */}
           <div className="bg-white rounded-xl shadow p-5">
-            <h2 className="font-semibold mb-3">Upcoming Pickups</h2>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left border-b">
-                  <th>Date</th>
-                  <th>Address</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pickups.map((p,i)=>(
-                  <tr key={i} className="border-b">
-                    <td>{p.date}</td>
-                    <td>{p.address}</td>
-                    <td>{p.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <h2 className="font-semibold mb-3">Recent Pickups</h2>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                <thead>
+                    <tr className="text-left border-b">
+                    <th className="pb-2">Date</th>
+                    <th className="pb-2">Address</th>
+                    <th className="pb-2">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {pickups.map((p,i)=>(
+                    <tr key={i} className="border-b">
+                        <td className="py-3">{p.date}</td>
+                        <td className="py-3">{p.address}</td>
+                        <td className="py-3">
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                p.status === 'Accepted' ? 'bg-green-100 text-green-700' : 
+                                p.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 
+                                'bg-gray-100 text-gray-700'
+                            }`}>
+                                {p.status}
+                            </span>
+                        </td>
+                    </tr>
+                    ))}
+                    {pickups.length === 0 && (
+                        <tr>
+                            <td colSpan="3" className="py-4 text-center text-gray-500">No pickups found</td>
+                        </tr>
+                    )}
+                </tbody>
+                </table>
+            </div>
           </div>
 
           {/* Breakdown */}
@@ -129,9 +98,9 @@ export default function Dashboard() {
                   <span>{b.percent}%</span>
                 </div>
 
-                <div className="w-full bg-gray-200 h-2 rounded">
+                <div className="w-full bg-gray-200 h-2 rounded mt-1">
                   <div
-                    className="bg-green-500 h-2 rounded"
+                    className="bg-green-500 h-2 rounded transition-all duration-500"
                     style={{ width: `${b.percent}%` }}
                   />
                 </div>
@@ -141,20 +110,15 @@ export default function Dashboard() {
 
         </div>
       </div>
->>>>>>> 5e988b0
     </div>
   );
 }
 
-<<<<<<< HEAD
-export default Dashboard;
-=======
 function Card({title,value}) {
   return (
     <div className="bg-white p-5 rounded-xl shadow text-center">
-      <p className="text-gray-500 text-sm">{title}</p>
-      <h2 className="text-2xl font-bold mt-2">{value}</h2>
+      <p className="text-gray-500 text-sm font-medium">{title}</p>
+      <h2 className="text-2xl font-bold mt-2 text-green-600">{value}</h2>
     </div>
   );
 }
->>>>>>> 5e988b0

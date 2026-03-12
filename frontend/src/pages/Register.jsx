@@ -1,9 +1,4 @@
-<<<<<<< HEAD
-import "../auth.css";
-import { useState, useEffect } from "react";
-=======
 import React, { useState, useEffect } from "react";
->>>>>>> 5e988b0
 import { useNavigate } from "react-router-dom";
 import { registerUser } from "../services/authService";
 
@@ -22,17 +17,6 @@ function Register() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-<<<<<<< HEAD
-  // 🔒 Auto redirect if already logged in
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    if (token) {
-      const user = JSON.parse(localStorage.getItem("user"));
-
-      if (user.role === "admin") navigate("/admin");
-      else if (user.role === "ngo") navigate("/ngo");
-=======
   // 🔒 Redirect if already logged in
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -41,10 +25,9 @@ function Register() {
     if (token && storedUser) {
       const user = JSON.parse(storedUser);
 
-      if (user?.role === "admin") navigate("/admin");
-      else if (user?.role === "ngo") navigate("/ngo");
->>>>>>> 5e988b0
-      else navigate("/volunteer");
+      if (user?.role === "admin") navigate("/dashboard");
+      else if (user?.role === "ngo") navigate("/dashboard");
+      else navigate("/dashboard");
     }
   }, [navigate]);
 
@@ -68,21 +51,6 @@ function Register() {
     try {
       const { confirmPassword, ...dataToSend } = formData;
 
-<<<<<<< HEAD
-      // 🔹 Call backend (will send OTP)
-      const response = await registerUser(dataToSend);
-
-      setSuccess("OTP sent to your email. Redirecting to verification...");
-
-      // 🔹 Redirect to OTP page
-      setTimeout(() => {
-        navigate("/otp", {
-          state: {
-            userId: response.userId,
-            type: "register"
-          }
-        });
-=======
       const response = await registerUser(dataToSend);
       const userId = response.userId;
 
@@ -93,7 +61,6 @@ function Register() {
 
       setTimeout(() => {
         navigate("/verify-register-otp");
->>>>>>> 5e988b0
       }, 1000);
 
     } catch (err) {
@@ -102,15 +69,6 @@ function Register() {
   };
 
   return (
-<<<<<<< HEAD
-    <div className="auth-page">
-
-      {/* LEFT SECTION */}
-      <div className="auth-left">
-        <h1>♻ WasteZero</h1>
-        <h2>Join the Recycling Revolution</h2>
-        <p>
-=======
     <div className="min-h-screen flex bg-gray-100">
 
       {/* LEFT SECTION */}
@@ -120,26 +78,11 @@ function Register() {
           Join the Recycling Revolution
         </h2>
         <p className="mb-8 text-green-100">
->>>>>>> 5e988b0
           WasteZero connects volunteers, NGOs, and administrators to schedule
           pickups, manage recycling opportunities, and make a positive impact
           on our environment.
         </p>
 
-<<<<<<< HEAD
-        <div className="features">
-          <div>
-            <h4>Schedule Pickups</h4>
-            <small>Easily arrange waste collection</small>
-          </div>
-          <div>
-            <h4>Track Impact</h4>
-            <small>Monitor environmental contribution</small>
-          </div>
-          <div>
-            <h4>Volunteer</h4>
-            <small>Join recycling initiatives</small>
-=======
         <div className="space-y-4">
           <div>
             <h4 className="font-semibold">Schedule Pickups</h4>
@@ -158,86 +101,11 @@ function Register() {
             <small className="text-green-200">
               Join recycling initiatives
             </small>
->>>>>>> 5e988b0
           </div>
         </div>
       </div>
 
       {/* RIGHT SECTION */}
-<<<<<<< HEAD
-      <div className="auth-right">
-        <div className="auth-card">
-
-          <div className="auth-tabs">
-            <button onClick={() => navigate("/")}>Login</button>
-            <button className="active">Register</button>
-          </div>
-
-          <h2>Create a new account</h2>
-          <small>Fill in your details to join WasteZero</small>
-
-          {error && <p className="error">{error}</p>}
-          {success && <p className="success">{success}</p>}
-
-          <form onSubmit={handleSubmit}>
-
-            <input
-              type="text"
-              name="name"
-              placeholder="Full Name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-            />
-
-            <input
-              type="text"
-              name="username"
-              placeholder="Choose a username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-            />
-
-            <input
-              type="email"
-              name="email"
-              placeholder="Your email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-
-            <input
-              type="password"
-              name="password"
-              placeholder="Create a password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-            />
-
-            <input
-              type="password"
-              name="confirmPassword"
-              placeholder="Confirm your password"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
-            />
-
-            <select
-              name="role"
-              value={formData.role}
-              onChange={handleChange}
-            >
-              <option value="volunteer">Volunteer</option>
-              <option value="ngo">NGO</option>
-              <option value="admin">Admin</option>
-            </select>
-
-            <button type="submit" className="submit-btn">
-=======
       <div className="flex w-full lg:w-1/2 items-center justify-center p-6">
         <div className="bg-white w-full max-w-md p-8 rounded-2xl shadow-lg">
 
@@ -245,7 +113,7 @@ function Register() {
           <div className="flex mb-6 border-b">
             <button
               onClick={() => navigate("/login")}
-              className="flex-1 py-2 text-gray-500 hover:text-blue-600"
+              className="flex-1 py-2 text-gray-500 hover:text-green-600"
             >
               Login
             </button>
@@ -373,25 +241,16 @@ function Register() {
 
             <button
               type="submit"
-              className="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-300 hover:text-blue-600 transition duration-300"
+              className="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300"
             >
->>>>>>> 5e988b0
               Create Account
             </button>
 
           </form>
         </div>
       </div>
-<<<<<<< HEAD
-
-=======
->>>>>>> 5e988b0
     </div>
   );
 }
 
-<<<<<<< HEAD
 export default Register;
-=======
-export default Register;
->>>>>>> 5e988b0
