@@ -121,7 +121,7 @@ export default function VolunteerDashboard() {
               <div className="flex items-center gap-2">
                 <FiStar className="text-yellow-500 text-xl" />
                 <h3 className="text-lg font-semibold text-gray-800">
-                  Top Match Opportunities
+                  Top Matched Opportunities
                 </h3>
               </div>
               <button
