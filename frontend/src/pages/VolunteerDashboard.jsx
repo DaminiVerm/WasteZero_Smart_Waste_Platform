@@ -1,301 +1,319 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { motion } from "framer-motion";
+import { FiMapPin, FiClock, FiStar, FiArrowRight, FiActivity, FiZap, FiTarget, FiBox } from "react-icons/fi";
+import toast from "react-hot-toast";
+import { useNotifications } from "../context/NotificationContext";
 
-import { FiMapPin, FiClock, FiStar, FiArrowRight } from "react-icons/fi";
+const statsConfig = [
+    { title: "Total Pickups", key: "totalPickups", icon: <FiBox />, color: "text-blue-600", bg: "bg-blue-50" },
+    { title: "Items Recycled", key: "recycledItems", icon: <FiZap />, color: "text-green-600", bg: "bg-green-50" },
+    { title: "CO2 Saved (kg)", key: "co2Saved", icon: <FiTarget />, color: "text-indigo-600", bg: "bg-indigo-50" },
+    { title: "Impact Hours", key: "volunteerHours", icon: <FiActivity />, color: "text-orange-600", bg: "bg-orange-50" },
+];
 
-// ─── Role badge colours (same as Dashboard.jsx) ───────────────────────────────
-const roleColors = {
-  admin:     "bg-purple-100 text-purple-700 border-purple-300",
-  ngo:       "bg-blue-100 text-blue-700 border-blue-300",
-  volunteer: "bg-green-100 text-green-700 border-green-300",
-  user:      "bg-gray-100 text-gray-700 border-gray-300",
+const CO2_FACTORS = {
+  plastic: 6,
+  paper: 3,
+  metal: 9,
+  glass: 1,
+  electronic: 8,
+  electronics: 8,
+  "electronic waste": 8,
+  "e-waste": 8,
+  ewaste: 8,
+};
+
+const buildVolunteerStatsFromPickups = (pickups = []) => {
+  const totalPickups = pickups.length;
+  const recycledItems = pickups.reduce(
+    (sum, pickup) => sum + (Array.isArray(pickup.wasteTypes) ? pickup.wasteTypes.length : 0),
+    0
+  );
+  const co2Saved = pickups.reduce((sum, pickup) => {
+    const pickupCo2 = (pickup.wasteTypes || []).reduce((pickupSum, type) => {
+      const normalizedType = type?.toString().trim().toLowerCase();
+      return pickupSum + (CO2_FACTORS[normalizedType] || 0);
+    }, 0);
+
+    return sum + pickupCo2;
+  }, 0);
+  const volunteerHours = pickups.filter((pickup) =>
+    ["Accepted", "In Progress", "Completed", "Closed"].includes(pickup.status)
+  ).length * 2;
+
+  return {
+    totalPickups,
+    recycledItems,
+    co2Saved,
+    volunteerHours,
+  };
 };
 
 export default function VolunteerDashboard() {
   const navigate = useNavigate();
-
-  // ── shared dashboard data (stats / pickups / breakdown) ──────────────────
   const [data, setData] = useState(null);
+  const [topMatches, setTopMatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { notifications, socket, fetchNotifications } = useNotifications();
 
-  // ── top-match opportunities ───────────────────────────────────────────────
-  const [topMatches, setTopMatches]     = useState([]);
-  const [matchLoading, setMatchLoading] = useState(true);
-  const [matchError, setMatchError]     = useState("");
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
 
-  // ── user info from localStorage ───────────────────────────────────────────
-  const storedUser = (() => {
-    try { return JSON.parse(localStorage.getItem("user")); }
-    catch { return null; }
-  })();
-  const userName = storedUser?.name || "Volunteer";
-  const userRole = storedUser?.role  || "volunteer";
+  const fetchData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
 
-  // ── fetch shared dashboard stats (same as Dashboard.jsx) ─────────────────
+    try {
+      const token = localStorage.getItem("token");
+      const [dashRes, matchRes, profileRes] = await Promise.all([
+        axios.get("/api/dashboard", { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get("/api/opportunity/matches/top", { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get("/api/users/me", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+
+      const profileUser = profileRes.data || {};
+      const currentUserId = profileUser._id || profileUser.id || storedUser.id || storedUser._id;
+      const pickupRes = currentUserId
+        ? await axios.get(`/api/pickups/user/${currentUserId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        : { data: [] };
+
+      const volunteerPickups = Array.isArray(pickupRes.data) ? pickupRes.data : [];
+      const derivedStats = buildVolunteerStatsFromPickups(volunteerPickups);
+
+      setData({
+        ...dashRes.data,
+        stats: derivedStats,
+        pickups: volunteerPickups.slice(0, 5),
+      });
+      setTopMatches(Array.isArray(matchRes.data) ? matchRes.data : []);
+    } catch (err) {
+      console.error("Dashboard error:", err);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const res = await axios.get("/api/dashboard", {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        setData(res.data);
-      } catch (err) {
-        console.log("Dashboard error:", err.response?.data || err.message);
-      }
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const refreshDashboard = () => {
+      fetchData({ silent: true });
+      fetchNotifications();
     };
 
-    fetchDashboard();
-    const interval = setInterval(fetchDashboard, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    socket.on("newNotification", refreshDashboard);
 
-  // ── fetch top-matched opportunities ──────────────────────────────────────
-  useEffect(() => {
-    const token = localStorage.getItem("token");
+    return () => {
+      socket.off("newNotification", refreshDashboard);
+    };
+  }, [socket, fetchNotifications]);
 
-    axios
-      .get("/api/opportunity/matches/top", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .then((res) => {
-        setTopMatches(res.data);
-        setMatchLoading(false);
-      })
-      .catch((err) => {
-        const msg = err.response?.data?.message || err.response?.data?.error;
-        setMatchError(msg || "");
-        setMatchLoading(false);
-      });
-  }, []);
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-600"></div>
+        <p className="text-gray-500 font-medium animate-pulse">Assembling your impact data...</p>
+      </div>
+    );
+  }
 
-  // ── helpers ───────────────────────────────────────────────────────────────
-  const scoreBadge = (score) => {
-    if (score >= 4) return "bg-green-100 text-green-700";
-    if (score >= 2) return "bg-blue-100 text-blue-700";
-    return "bg-gray-100 text-gray-600";
-  };
-
-  const imageUrl = (img) => {
-    if (!img) return "https://placehold.co/400x160?text=No+Image";
-    const clean = img.replace(/^\/+/, "");
-    return clean.startsWith("uploads")
-      ? `http://localhost:3000/${clean}`
-      : `http://localhost:3000/uploads/${clean}`;
-  };
-
-  // ── stats / pickups / breakdown ───────────────────────────────────────────
-  const stats     = data?.stats     || {};
-  const pickups   = data?.pickups   || [];
+  const stats = data?.stats || {};
+  const pickups = data?.pickups || [];
   const breakdown = data?.breakdown || [];
-
-  if (!data) return <p className="p-10 text-center">Loading dashboard...</p>;
+  const volunteerApplications = data?.volunteerApplications || [];
+  const opportunityNotifications = notifications
+    .filter((notification) => notification.type === "opportunity_status")
+    .slice(0, 5);
 
   return (
-    <div className="flex w-full min-h-screen bg-gray-100">
-        <div className="flex-1 p-6 space-y-6">
+    <div className="space-y-6 sm:space-y-8 lg:space-y-10 pb-10">
+      {/* ── Welcome Header ───────────────────────────────────────────.. */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl sm:text-4xl font-black text-gray-900 dark:text-white tracking-tight">
+            Hi, <span className="text-green-600 font-black">{storedUser.name || "Volunteer"}</span>!
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 font-medium tracking-tight">Here's your environmental impact for this month.</p>
+        </div>
+        <button 
+          onClick={() => navigate("/schedule")}
+          className="w-full md:w-auto bg-green-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-green-700 transition-all shadow-xl shadow-green-100 dark:shadow-green-900/10 flex items-center justify-center space-x-2 active:scale-95"
+        >
+          <span>Schedule New Pickup</span>
+          <FiArrowRight />
+        </button>
+      </div>
 
-          {/* ── Welcome Banner ─────────────────────────────────────────── */}
-          <div className="flex items-center justify-between bg-white rounded-2xl shadow px-6 py-4 border border-gray-100">
-            <div>
-              <p className="text-sm text-gray-400 mb-0.5">Welcome back 👋</p>
-              <h1 className="text-2xl font-bold text-gray-800">{userName}</h1>
+      {/* ── Stats Grid ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statsConfig.map((stat, i) => (
+          <motion.div 
+            key={stat.title}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="bg-white dark:bg-gray-900 p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center space-y-3 cursor-default hover:shadow-xl dark:hover:shadow-green-900/5 transition-all group"
+          >
+            <div className={`${stat.bg} ${stat.color} dark:bg-opacity-10 p-4 rounded-2xl text-2xl group-hover:scale-110 transition-transform`}>
+              {stat.icon}
             </div>
-            <span className={`capitalize text-sm font-semibold px-4 py-1.5 rounded-full border ${roleColors[userRole] || roleColors.user}`}>
-              {userRole}
-            </span>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">{stat.title}</p>
+            <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">{stats[stat.key] || 0}</h2>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6 lg:gap-10">
+        {/* ── Matching Opportunities ────────────────────────────────── */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-2">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-white flex items-center space-x-3 tracking-tighter">
+              <FiStar className="text-yellow-500" />
+              <span>Smart Matches For You</span>
+            </h2>
+            <button 
+              onClick={() => navigate("/opportunities")}
+              className="text-green-600 dark:text-green-400 font-black hover:underline text-[10px] uppercase tracking-widest"
+            >
+              Explore All
+            </button>
           </div>
 
-          {/* ── Stats Cards ────────────────────────────────────────────── */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <Card title="Total Pickups"   value={stats.totalPickups   || 0} />
-            <Card title="Recycled Items"  value={stats.recycledItems  || 0} />
-            <Card title="CO2 Saved"       value={stats.co2Saved       || 0} />
-            <Card title="Volunteer Hours" value={stats.volunteerHours || 0} />
-          </div>
-
-          {/* ── TOP MATCH OPPORTUNITIES ────────────────────────────────── */}
-          <div className="bg-white rounded-2xl shadow border p-6">
-
-            {/* Section header */}
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2">
-                <FiStar className="text-yellow-500 text-xl" />
-                <h3 className="text-lg font-semibold text-gray-800">
-                  Top Matched Opportunities
-                </h3>
-              </div>
-              <button
-                onClick={() => navigate("/opportunities")}
-                className="flex items-center gap-1 text-sm text-green-600 hover:text-green-700 font-medium transition"
+          <div className="grid md:grid-cols-2 gap-6">
+            {topMatches.length > 0 ? topMatches.slice(0, 4).map((opp, i) => (
+              <motion.div 
+                key={opp._id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                onClick={() => navigate(`/opportunity/${opp._id}`)}
+                className="bg-white dark:bg-gray-900 p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-2xl hover:border-green-200 dark:hover:border-green-700 transition-all cursor-pointer group flex flex-col"
               >
-                View All <FiArrowRight />
-              </button>
-            </div>
-
-            {/* Loading spinner */}
-            {matchLoading && (
-              <div className="flex justify-center items-center py-10">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
-              </div>
-            )}
-
-            {/* Error */}
-            {!matchLoading && matchError && (
-              <p className="text-center text-red-500 text-sm py-6">{matchError}</p>
-            )}
-
-            {/* Empty state */}
-            {!matchLoading && !matchError && topMatches.length === 0 && (
-              <div className="text-center py-10">
-                <p className="text-gray-400 text-sm mb-1">No matches found yet.</p>
-                <p className="text-gray-400 text-xs">
-                  Update your{" "}
-                  <span
-                    className="text-green-600 cursor-pointer underline"
-                    onClick={() => navigate("/my-profile")}
-                  >
-                    profile skills and location
-                  </span>{" "}
-                  to get personalised matches.
-                </p>
-              </div>
-            )}
-
-            {/* Match cards grid */}
-            {!matchLoading && !matchError && topMatches.length > 0 && (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {topMatches.map((opp) => (
-                  <div
-                    key={opp._id}
-                    className="border rounded-xl overflow-hidden hover:shadow-md transition cursor-pointer group"
-                    onClick={() => navigate(`/opportunity/${opp._id}`)}
-                  >
-                    {/* Image */}
-                    <div className="relative">
-                      <img
-                        src={imageUrl(opp.image)}
-                        alt={opp.title}
-                        className="h-36 w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <span className={`absolute top-2 right-2 text-xs font-semibold px-2 py-1 rounded-full ${scoreBadge(opp.matchScore)}`}>
-                        ⭐ Match {opp.matchScore}
-                      </span>
-                    </div>
-
-                    {/* Card body */}
-                    <div className="p-4">
-                      <h4 className="font-semibold text-gray-800 text-sm mb-1 truncate">
-                        {opp.title}
-                      </h4>
-                      <p className="text-gray-500 text-xs line-clamp-2 mb-3">
-                        {opp.description}
-                      </p>
-
-                      <div className="flex flex-col gap-1 text-xs text-gray-500">
-                        {opp.location && (
-                          <span className="flex items-center gap-1">
-                            <FiMapPin className="text-green-500" />
-                            {opp.location}
-                          </span>
-                        )}
-                        {opp.duration && (
-                          <span className="flex items-center gap-1">
-                            <FiClock className="text-blue-500" />
-                            {opp.duration}
-                          </span>
-                        )}
-                      </div>
-
-                      <button
-                        className="mt-4 w-full text-xs bg-green-600 hover:bg-green-700 text-white py-1.5 rounded-lg transition"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/opportunity/${opp._id}`);
-                        }}
-                      >
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ── Recent Pickups + Recycling Breakdown ───────────────────── */}
-          <div className="grid lg:grid-cols-2 gap-6">
-
-            {/* Pickups Table */}
-            <div className="bg-white rounded-xl shadow p-5">
-              <h2 className="font-semibold mb-3">Recent Pickups</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left border-b">
-                      <th className="pb-2">Date</th>
-                      <th className="pb-2">Address</th>
-                      <th className="pb-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pickups.map((p, i) => (
-                      <tr key={i} className="border-b">
-                        <td className="py-3">{p.date}</td>
-                        <td className="py-3">{p.address}</td>
-                        <td className="py-3">
-                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                            p.status === "Accepted" ? "bg-green-100 text-green-700" :
-                            p.status === "Pending"  ? "bg-yellow-100 text-yellow-700" :
-                            "bg-gray-100 text-gray-700"
-                          }`}>
-                            {p.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                    {pickups.length === 0 && (
-                      <tr>
-                        <td colSpan="3" className="py-4 text-center text-gray-500">
-                          No pickups found
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Recycling Breakdown */}
-            <div className="bg-white rounded-xl shadow p-5">
-              <h2 className="font-semibold mb-3">Recycling Breakdown</h2>
-              {breakdown.map((b, i) => (
-                <div key={i} className="mb-4">
-                  <div className="flex justify-between text-sm">
-                    <span>{b.type}</span>
-                    <span>{b.percent}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 h-2 rounded mt-1">
-                    <div
-                      className="bg-green-500 h-2 rounded transition-all duration-500"
-                      style={{ width: `${b.percent}%` }}
-                    />
+                <div className="flex justify-between items-start mb-6">
+                  <div className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                    {opp.wasteType || "General"}
                   </div>
                 </div>
-              ))}
-            </div>
-
+                <h3 className="text-xl font-black text-gray-900 dark:text-white group-hover:text-green-600 transition-colors mb-2 line-clamp-1 tracking-tight">
+                  {opp.title}
+                </h3>
+                <p className="text-sm text-gray-400 font-medium line-clamp-2 mb-6 leading-relaxed">
+                  {opp.description}
+                </p>
+                <div className="mt-auto pt-4 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between text-xs font-bold text-gray-400">
+                  <div className="flex items-center space-x-2">
+                    <FiMapPin className="text-green-500" />
+                    <span className="truncate max-w-[120px]">{opp.location}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <FiClock className="text-indigo-500" />
+                    <span>{opp.duration || "Full Day"}</span>
+                  </div>
+                </div>
+              </motion.div>
+            )) : (
+              <div className="col-span-2 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[2.5rem] p-12 text-center space-y-3">
+                <p className="text-gray-500 dark:text-gray-400 font-black uppercase tracking-widest text-xs">No active matches found.</p>
+                <p className="text-sm text-gray-400">Try updating your location or waste preferences.</p>
+              </div>
+            )}
           </div>
         </div>
-    </div>
-  );
-}
 
-// ─── Reusable stat card ───────────────────────────────────────────────────────
-function Card({ title, value }) {
-  return (
-    <div className="bg-white p-5 rounded-xl shadow text-center">
-      <p className="text-gray-500 text-sm font-medium">{title}</p>
-      <h2 className="text-2xl font-bold mt-2 text-green-600">{value}</h2>
+        {/* ── Recent Activity ───────────────────────────────────────── */}
+        <div className="bg-white dark:bg-gray-900 p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-800 self-start space-y-8">
+          <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight uppercase tracking-widest text-[10px]">Recent Activity</h2>
+          <div className="space-y-6">
+            {volunteerApplications.length > 0 ? volunteerApplications.slice(0, 5).map((application) => {
+              const isAccepted = application.applicationStatus === "accepted";
+              const isRejected = application.applicationStatus === "rejected";
+
+              return (
+                <div key={application._id} className="flex items-start space-x-4">
+                  <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${
+                    isAccepted
+                      ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+                      : isRejected
+                        ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.35)]"
+                        : "bg-yellow-500"
+                  }`}></div>
+                  <div className="space-y-1">
+                    <p className="text-[13px] font-black text-gray-800 dark:text-gray-200 leading-none">
+                      {isAccepted ? "Application Accepted" : isRejected ? "Application Rejected" : "Application Pending"}
+                    </p>
+                    <p className="text-xs text-gray-400 font-medium max-w-[220px]">
+                      {application.title} in {application.location}
+                    </p>
+                  </div>
+                </div>
+              );
+            }) : opportunityNotifications.length > 0 ? opportunityNotifications.map((notification) => {
+              const isAccepted = notification.content?.toLowerCase().includes("accepted");
+              const isRejected = notification.content?.toLowerCase().includes("rejected");
+
+              return (
+                <div key={notification._id} className="flex items-start space-x-4">
+                  <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${
+                    isAccepted
+                      ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+                      : isRejected
+                        ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.35)]"
+                        : "bg-yellow-500"
+                  }`}></div>
+                  <div className="space-y-1">
+                    <p className="text-[13px] font-black text-gray-800 dark:text-gray-200 leading-none">
+                      {isAccepted ? "Application Accepted" : isRejected ? "Application Rejected" : "Application Update"}
+                    </p>
+                    <p className="text-xs text-gray-400 font-medium max-w-[220px]">{notification.content}</p>
+                  </div>
+                </div>
+              );
+            }) : pickups.length > 0 ? pickups.slice(0, 5).map((pickup, i) => (
+              <div key={i} className="flex items-start space-x-4">
+                <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${
+                  pickup.status === 'Accepted' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 
+                  pickup.status === 'Pending' ? 'bg-yellow-500' : 'bg-gray-300'
+                }`}></div>
+                <div className="space-y-1">
+                  <p className="text-[13px] font-black text-gray-800 dark:text-gray-200 leading-none">
+                    {pickup.status === 'Accepted' ? "Pickup Scheduled" : "Pickup Requested"}
+                  </p>
+                  <p className="text-xs text-gray-400 font-medium truncate max-w-[180px]">{pickup.address}</p>
+                </div>
+              </div>
+            )) : (
+              <p className="text-gray-400 text-xs text-center py-10 font-bold uppercase tracking-widest">No recent activity.</p>
+            )}
+          </div>
+
+          <div className="pt-8 border-t border-gray-50 dark:border-gray-800">
+             <h3 className="text-[10px] font-black text-gray-900 dark:text-gray-400 uppercase tracking-widest mb-6">Material Breakdown</h3>
+             <div className="space-y-5">
+               {(breakdown.length > 0 ? breakdown : [{type: 'Plastic', percent: 65}, {type: 'E-Waste', percent: 25}, {type: 'Paper', percent: 10}]).map((item, i) => (
+                 <div key={i} className="space-y-2">
+                   <div className="flex justify-between text-[10px] font-black uppercase text-gray-400 dark:text-gray-500">
+                     <span>{item.type}</span>
+                     <span>{item.percent}%</span>
+                   </div>
+                   <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                     <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${item.percent}%` }}
+                        className="h-full bg-green-500 dark:bg-green-600"
+                     />
+                   </div>
+                 </div>
+               ))}
+             </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
