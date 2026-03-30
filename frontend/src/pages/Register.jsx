@@ -25,9 +25,9 @@ function Register() {
     if (token && storedUser) {
       const user = JSON.parse(storedUser);
 
-      if (user?.role === "admin") navigate("/admin");
-      else if (user?.role === "ngo") navigate("/ngo");
-      else navigate("/volunteer");
+      if (user?.role === "admin") navigate("/dashboard");
+      else if (user?.role === "ngo") navigate("/dashboard");
+      else navigate("/dashboard");
     }
   }, [navigate]);
 
@@ -113,7 +113,7 @@ function Register() {
           <div className="flex mb-6 border-b">
             <button
               onClick={() => navigate("/login")}
-              className="flex-1 py-2 text-gray-500 hover:text-blue-600"
+              className="flex-1 py-2 text-gray-500 hover:text-green-600"
             >
               Login
             </button>
@@ -241,7 +241,7 @@ function Register() {
 
             <button
               type="submit"
-              className="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-gray-300 hover:text-blue-600 transition duration-300"
+              className="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300"
             >
               Create Account
             </button>

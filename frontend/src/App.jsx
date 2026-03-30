@@ -4,7 +4,7 @@ import './index.css'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
-import Sidebar from './components/Sidebar'
+import VolunteerDashboard from './pages/VolunteerDashboard'   // added
 import Layout from './components/Layout'
 import Opportunities from './pages/Opportunities'
 import SchedulePickup from './pages/SchedulePickup'
@@ -19,10 +19,19 @@ import MyProfile from './pages/MyProfile'
 import AdminPanel from './pages/AdminPanel'
 import ProtectedRoute from './components/ProtectRoute.jsx'
 
-function App() {
+// Helper: reads role from localStorage and picks the right dashboard component
+function DashboardRouter() {
+  const storedUser = (() => {
+    try { return JSON.parse(localStorage.getItem("user")); }
+    catch { return null; }
+  })();
 
+  if (storedUser?.role === "volunteer") return <VolunteerDashboard />;
+  return <Dashboard />;   // admin / ngo / fallback → original dashboard
+}
+
+function App() {
   return (
-    
     <BrowserRouter>
      <Toaster/>
     <Routes>

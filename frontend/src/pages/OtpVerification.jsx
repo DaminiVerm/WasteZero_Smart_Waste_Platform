@@ -49,9 +49,7 @@ function OtpVerification() {
         setSuccess("Login successful!");
 
         setTimeout(() => {
-          if (data.user.role === "admin") navigate("/dashboard");
-          else if (data.user.role === "ngo") navigate("/opportunities");
-          else navigate("/opportunities");
+          navigate("/dashboard");
         }, 1000);
       }
     } catch (err) {
